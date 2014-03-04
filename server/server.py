@@ -29,7 +29,7 @@ sock.bind(("0.0.0.0", port))
 sock.setblocking(0)
  
 # connect to arduino  
-
+"""
 locations=['/dev/tty.usbmodem411', '/dev/tty.usbmodem641', '/dev/ttyUSB0','/dev/ttyUSB1','/dev/ttyUSB2','/dev/ttyUSB3', 
 '/dev/ttyS0','/dev/ttyS1','/dev/ttyS2','/dev/ttyS3']    
     
@@ -44,7 +44,7 @@ for device in locations:
         break  
     except:    
         print "Failed to connect on",device     
-
+"""
   
 # ============
 # main program
@@ -59,6 +59,7 @@ while running:
         # read in data
         data = str(result[0][0].recvfrom(1024)[0]) + '\n'
         print "Received:", data
+        """
         try:    
             print 'writing to Arduino'
             arduino.write(data)    
@@ -71,3 +72,6 @@ while running:
                 time.sleep(1) 
         except:    
             print "Failed to send!"   
+
+        """
+        

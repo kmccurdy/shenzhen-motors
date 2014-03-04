@@ -1,6 +1,6 @@
 # client sensor data simulation
 #
-# uses interactive user input to simulate RPi XloBorg Accelerometer sensor data,
+# uses interactive user input to read RPi XloBorg Accelerometer sensor data,
 # process, translate into stepper motor targets,
 # and send to arduino
 #
@@ -11,10 +11,7 @@
 # http://www.loveelectronics.co.uk/Tutorials/8/hmc5883l-tutorial-and-arduino-library
 
 import socket
-#import XLoBorg
-from SimXLo import SimXLo
-from multiprocessing import Process, Pipe
-from multiprocessing.managers import BaseManager
+import XLoBorg
 import time
 import os
 import math
@@ -26,35 +23,18 @@ import random
 # =========
 
 # set to True if we want to just test the motor without worrying about XLo simulation
-stepper_test_mode = True
+stepper_test_mode = False
 
 # how long to wait between messages, in seconds
-sleepytime = .5 # 0.005 # more pro time: 200 msgs/minute
+sleepytime = 0.005 # more pro time: 200 msgs/minute
 
 # network stufff
-server = 'localhost' #os.getenv('SERVER', 'modelb')
-port = 5005
+server =  '192.168.178.65' # my macbook #'192.168.178.177' # the arduino #'localhost' #os.getenv('SERVER', 'modelb')
+port = 5005 #8888
 
 # setup for the accelerometer
-#XLoBorg.printFunction = XLoBorg.NoPrint
-#XLoBorg.Init()
-
-### setup accelerometer simulation ###
-#XLo = SimXLo() # simple way; access only possible from one process
-
-# use Manager from multiprocessing to handle multiple processes
-class MyManager(BaseManager):
-    pass
-
-MyManager.register('XLo', SimXLo)
-# start subprocess to start the manager
-manager = MyManager()
-manager.start()
-# create proxy SimXLo
-XLo = manager.XLo()
-
-# use Pipe to open connection between user input and XLo
-#sender, receiver = Pipe()
+XLoBorg.printFunction = XLoBorg.NoPrint
+XLoBorg.Init()
 
 ### ###
 
@@ -111,19 +91,6 @@ def cartesian_to_angle(mx, my):
 # main program
 # ============
 
-target = 0
-
-readXLo = Process(target=test_read, args=(XLo, ))
-rotateXLo = Process(target=test_rotate, args=(XLo, ))
-
-readXLo.start()
-rotateXLo.start()
-
-readXLo.join()
-rotateXLo.join()
-
-#userInput = Process(target=get_sim_rotate_target, args=(sender, ))
-#userInput.start()
 
 while True:
 
@@ -132,14 +99,10 @@ while True:
         sock.sendto(target, (server, port))
         time.sleep(sleepytime)
     else:
-        #target = raw_input("Enter the desired angle to turn the SimXLo (0-360): ")
-        if receiver.poll(): # check for data from user
-            target = receiver.recv()
-            XLo.set_target(target)
-            XLo.sim_rotate()
-        coords = XLo.ReadAccelerometer()
-        print coords
-        time.sleep(1)
+        message = '%+01.4f,%+01.4f,%+01.4f' \
+                % XLoBorg.ReadAccelerometer()
+        sock.sendto(message, (server, port))
+        time.sleep(sleepytime)
 
         # do other processing here
 
