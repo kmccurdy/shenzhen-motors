@@ -22,11 +22,55 @@ import random
 # init
 # =========
 
+# object to handle accelerometer readings
+class XLoReader:
+    def __init__(self):       
+        self.full_step = 200 # number of steps per full rotation for our stepper motor
+        self.aX = [] # placeholders for moving average arrays
+        self.aY = []
+        self.MAlength = 20 # length for moving average arrays
+        self.offset = 0 # for baseline angle correction
+        self.steps = 0 # hold target stepper value
+    # using cylindrical coordinates with x and y, ignoring z
+    # http://electron9.phys.utk.edu/vectors/3dcoordinates.htm
+    # use arrays to get moving average
+    def get_angle(self):
+        x = math.fsum(self.aX)/self.MAlength
+        y = math.fsum(self.aY)/self.MAlength
+        # r = math.sqrt(x*x + y*y) # in case we need r for checking or whatever, here it is
+        f = math.atan2(y, x)
+        return f
+    # convert angle in radians to step count
+    # optional offset parameter to correct for baseline angle
+    def get_steps(self, f):
+        self.steps = (f / (2 * math.pi)) * self.full_step + self.offset
+        self.steps = math.floor(self.steps)
+    # add new accelerometer values to array, or initialize array if necessary
+    def read(self, x, y):
+        if self.aX:
+            self.aX.insert(0, x)
+            self.aX.pop()
+        else:
+            self.aX = [x] * self.MAlength 
+        if self.aY:
+            self.aY.insert(0, y)
+            self.aY.pop()
+        else:
+            self.aY = [y] * self.MAlength 
+    # main function - convert XloBorg accelerometer measurements to step count for rotation
+    def rotate(self, x, y):
+        self.read(x, y)
+        f = self.get_angle()
+        self.get_steps(f)
+        return self.steps
+
+reader = XLoReader()
+
 # set to True if we want to just test the motor without worrying about XLo simulation
 stepper_test_mode = False
 
 # how long to wait between messages, in seconds
-sleepytime = 0.005 # more pro time: 200 msgs/minute
+sleepytime = 0.005 
 
 # network stufff
 server =  '192.168.178.65' # my macbook #'192.168.178.177' # the arduino #'localhost' #os.getenv('SERVER', 'modelb')
@@ -35,8 +79,6 @@ port = 5005 #8888
 # setup for the accelerometer
 XLoBorg.printFunction = XLoBorg.NoPrint
 XLoBorg.Init()
-
-### ###
 
 # make the socket connection
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -47,45 +89,6 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 BERLIN = 54.69
 declinationAngle = BERLIN/1000
 
-# =========
-# functions
-# =========
-
-def get_sim_rotate_target(conn):
-    target = 1
-    while target: # just hitting 'Enter' causes the function to return
-        target = raw_input("Enter the desired angle to turn the SimXLo (0-360): ")
-        conn.send(target)
-        time.sleep(.5)
-
-
-def test_rotate(XLoProxy):
-    time.sleep(1)
-    print '-' * 20
-    print 'Setting XLo target to 180'
-    XLoProxy.set_target(180)
-    XLoProxy.sim_rotate()
-    print '-' * 20
-    time.sleep(1)
-    print '\n*** Process test_rotate completed ***\n'
-
-def test_read(XLoProxy):
-    vals = 80 * [None]
-    for i in range(80):
-        vals[i] = XLoProxy.ReadAccelerometer()
-        print vals[i]
-        time.sleep(.05)
-    print '\n*** Process test_read completed ***\n'
-
-def cartesian_to_angle(mx, my):
-    # get the heading in radians
-    heading = math.atan2 (my,mx)
-    # Correct negative values
-    if (heading < 0):
-            heading  = heading + (2 * math.pi)
-    # convert to degrees
-    heading = heading * 180/math.pi;
-    return heading
 
 # ============
 # main program
@@ -99,20 +102,8 @@ while True:
         sock.sendto(target, (server, port))
         time.sleep(sleepytime)
     else:
-        message = '%+01.4f,%+01.4f,%+01.4f' \
-                % XLoBorg.ReadAccelerometer()
+        X, Y, Z = XLoBorg.ReadAccelerometer()
+        steps = reader.rotate(X, Y)
+        message = str(steps)
         sock.sendto(message, (server, port))
         time.sleep(sleepytime)
-
-        # do other processing here
-
-
-        # set up two processes 
-        # first one simulates repeatedly reading from the Xlo,
-        # calculating a moving average,
-        # transforming into a stepper value,
-        # and sending it to the server
-        # second process takes user input to 'control' the simulated XLo sensor
-
-    #message = '%+01.4f,%+01.4f,%+01.4f' \
-    #        % XLoBorg.ReadAccelerometer()
